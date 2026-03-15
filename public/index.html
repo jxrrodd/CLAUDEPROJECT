@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Monitor</title>
+<style>
+  :root {
+    --green: #00ff41;
+    --green-dim: #00cc33;
+    --green-dark: #003311;
+    --red: #ff2d55;
+    --yellow: #ffd60a;
+    --blue: #0af;
+    --bg: #0a0a0a;
+    --bg2: #111;
+    --bg3: #1a1a1a;
+    --border: #1f1f1f;
+    --text: #e0e0e0;
+    --text-dim: #666;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Courier New', Courier, monospace;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 0 8px var(--yellow));
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px var(--yellow)); }
+    50% { filter: drop-shadow(0 0 16px var(--yellow)); }
+  }
+
+  .logo h1 {
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--green);
+    text-shadow: 0 0 12px var(--green);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  #reset-btn {
+    background: transparent;
+    border: 1px solid var(--text-dim);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  #reset-btn:hover { border-color: var(--red); color: var(--red); }
+
+  .connection-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .status-dot.connected {
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: blink 2s ease-in-out infinite;
+  }
+  .status-dot.disconnected { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ── Stats bar ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .stat {
+    padding: 16px 24px;
+    border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 10px var(--green-dim);
+    line-height: 1;
+    transition: all 0.3s;
+  }
+  .stat-value.bump { text-shadow: 0 0 20px var(--green), 0 0 40px var(--green); }
+
+  /* ── Main tabs ── */
+  .main-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+
+  .main-tab {
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -1px;
+  }
+  .main-tab:hover { color: var(--text); }
+  .main-tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+  /* ── Tab panes ── */
+  .pane { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .pane.active { display: flex; }
+
+  /* ── Filter tabs ── */
+  .filter-bar {
+    display: flex;
+    gap: 2px;
+    padding: 8px 24px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .filter-btn {
+    padding: 4px 14px;
+    font-family: inherit;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--green-dim); color: var(--green-dim); }
+  .filter-btn.active { background: var(--green-dark); border-color: var(--green); color: var(--green); }
+
+  /* ── Event feed ── */
+  #event-feed {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  #event-feed::-webkit-scrollbar { width: 4px; }
+  #event-feed::-webkit-scrollbar-track { background: var(--bg); }
+  #event-feed::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .event-item {
+    display: grid;
+    grid-template-columns: 6px 1fr auto;
+    align-items: start;
+    gap: 12px;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+    animation: slideIn 0.2s ease-out;
+  }
+  .event-item:hover { background: var(--bg3); }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .event-accent {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+
+  .event-body { min-width: 0; }
+
+  .event-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .event-type {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+
+  .event-tool-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+  }
+
+  .event-status-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .event-cmd {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 700px;
+    margin-bottom: 2px;
+  }
+  .event-cmd code {
+    background: var(--bg3);
+    padding: 2px 6px;
+    border-radius: 2px;
+    color: var(--green-dim);
+    font-size: 11px;
+  }
+
+  .event-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .event-time {
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    margin-top: 4px;
+  }
+
+  /* Event type colors */
+  .type-PreToolUse  .event-type { color: #0af; }
+  .type-PreToolUse  .event-accent { background: #0af; box-shadow: 0 0 6px #0af; }
+  .type-PreToolUse  .event-tool-badge { color: #0af; border-color: #0af44; }
+
+  .type-PostToolUse .event-type { color: var(--green); }
+  .type-PostToolUse .event-accent { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .type-PostToolUse .event-tool-badge { color: var(--green); border-color: #00ff4144; }
+
+  .type-SessionStart .event-type { color: var(--yellow); }
+  .type-SessionStart .event-accent { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+
+  .type-SessionEnd  .event-type { color: var(--red); }
+  .type-SessionEnd  .event-accent { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .type-Notification .event-type { color: #c77dff; }
+  .type-Notification .event-accent { background: #c77dff; box-shadow: 0 0 6px #c77dff; }
+
+  .type-Stop .event-type { color: var(--red); }
+  .type-Stop .event-accent { background: var(--red); }
+
+  /* ── Agents graph ── */
+  #agents-pane {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .agent-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    transition: border-color 0.2s;
+  }
+  .agent-card:hover { border-color: var(--green-dim); }
+
+  .agent-id {
+    font-size: 12px;
+    color: var(--green);
+    margin-bottom: 8px;
+    word-break: break-all;
+  }
+
+  .agent-stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .agent-stat-row span:last-child { color: var(--text); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px;
+    color: var(--text-dim);
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; letter-spacing: 1px; }
+
+  /* ── Scrollbar ── */
+  #agents-pane::-webkit-scrollbar { width: 4px; }
+  #agents-pane::-webkit-scrollbar-track { background: var(--bg); }
+  #agents-pane::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <span class="logo-icon">⚡</span>
+    <h1>CLAUDE CODE MONITOR</h1>
+  </div>
+  <div class="header-right">
+    <button id="reset-btn">■ RESET STATS</button>
+    <div class="connection-status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">CONNECTING</span>
+    </div>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-label">Total Events</div>
+    <div class="stat-value" id="stat-total">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Tools Used</div>
+    <div class="stat-value" id="stat-tools">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Agents</div>
+    <div class="stat-value" id="stat-agents">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Sessions</div>
+    <div class="stat-value" id="stat-sessions">0</div>
+  </div>
+</div>
+
+<!-- Main tabs -->
+<div class="main-tabs">
+  <button class="main-tab active" data-pane="feed-pane">⬛ EVENT FEED</button>
+  <button class="main-tab" data-pane="agents-pane">◈ AGENTS GRAPH</button>
+</div>
+
+<!-- Event Feed pane -->
+<div class="pane active" id="feed-pane">
+  <div class="filter-bar">
+    <button class="filter-btn active" data-filter="ALL">ALL</button>
+    <button class="filter-btn" data-filter="TOOLS">TOOLS</button>
+    <button class="filter-btn" data-filter="AGENTS">AGENTS</button>
+    <button class="filter-btn" data-filter="PROMPTS">PROMPTS</button>
+    <button class="filter-btn" data-filter="SESSIONS">SESSIONS</button>
+  </div>
+  <div id="event-feed">
+    <div class="empty-state" id="empty-state">
+      <div class="icon">⚡</div>
+      <p>WAITING FOR CLAUDE CODE EVENTS...</p>
+      <p style="margin-top:8px;font-size:11px;">Start a Claude session to see activity here</p>
+    </div>
+  </div>
+</div>
+
+<!-- Agents Graph pane -->
+<div class="pane" id="agents-pane">
+  <div id="agents-container"></div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}`;
+const FILTER_MAP = {
+  ALL: null,
+  TOOLS: ['PreToolUse', 'PostToolUse'],
+  AGENTS: ['AgentStart', 'AgentEnd'],
+  PROMPTS: ['Notification'],
+  SESSIONS: ['SessionStart', 'SessionEnd', 'Stop'],
+};
+
+let activeFilter = 'ALL';
+let allEvents = [];
+let agents = {};
+let ws;
+
+// ── WebSocket ──────────────────────────────────────────────────────────────────
+function connect() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setStatus(true);
+  };
+
+  ws.onmessage = ({ data }) => {
+    const msg = JSON.parse(data);
+    if (msg.type === 'snapshot') {
+      allEvents = msg.data.events;
+      updateStats(msg.data.stats);
+      rebuildFeed();
+      rebuildAgents();
+    } else if (msg.type === 'event') {
+      allEvents.unshift(msg.data);
+      updateStats(msg.stats);
+      prependEvent(msg.data);
+      updateAgentCard(msg.data);
+    } else if (msg.type === 'reset') {
+      allEvents = [];
+      agents = {};
+      updateStats({ totalEvents: 0, toolsUsed: 0, agents: 0, sessions: 0 });
+      rebuildFeed();
+      rebuildAgents();
+    }
+  };
+
+  ws.onclose = () => {
+    setStatus(false);
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function setStatus(connected) {
+  document.getElementById('status-dot').className = 'status-dot ' + (connected ? 'connected' : 'disconnected');
+  document.getElementById('status-text').textContent = connected ? 'CONNECTED' : 'DISCONNECTED';
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────────
+function updateStats(s) {
+  setStatVal('stat-total', s.totalEvents);
+  setStatVal('stat-tools', s.toolsUsed);
+  setStatVal('stat-agents', s.agents);
+  setStatVal('stat-sessions', s.sessions);
+}
+
+function setStatVal(id, val) {
+  const el = document.getElementById(id);
+  el.textContent = val;
+  el.classList.add('bump');
+  setTimeout(() => el.classList.remove('bump'), 400);
+}
+
+// ── Feed ───────────────────────────────────────────────────────────────────────
+function matchesFilter(event) {
+  const types = FILTER_MAP[activeFilter];
+  if (!types) return true;
+  return types.includes(event.hookType);
+}
+
+function buildEventEl(event) {
+  const item = document.createElement('div');
+  item.className = `event-item type-${event.hookType || 'Unknown'}`;
+  item.dataset.hookType = event.hookType || '';
+
+  const time = new Date(event.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+
+  let cmdHtml = '';
+  if (event.command) {
+    cmdHtml = `<div class="event-cmd"><code>$ ${escHtml(event.command)}</code></div>`;
+  } else if (event.input) {
+    const preview = JSON.stringify(event.input).slice(0, 120);
+    cmdHtml = `<div class="event-cmd"><code>${escHtml(preview)}</code></div>`;
+  }
+
+  let descHtml = event.description ? `<div class="event-desc">${escHtml(event.description)}</div>` : '';
+
+  let toolBadge = event.tool ? `<span class="event-tool-badge">${escHtml(event.tool)}</span>` : '';
+
+  const statusIcon = event.hookType === 'PostToolUse'
+    ? (event.exitCode === 0 || event.exitCode == null ? '<span class="event-status-icon" style="color:var(--green)">✓</span>' : '<span class="event-status-icon" style="color:var(--red)">✗</span>')
+    : event.hookType === 'PreToolUse' ? '<span class="event-status-icon" style="color:#0af">▶</span>'
+    : event.hookType === 'SessionEnd' ? '<span class="event-status-icon" style="color:var(--red)">●</span>'
+    : '';
+
+  item.innerHTML = `
+    <div class="event-accent"></div>
+    <div class="event-body">
+      <div class="event-header">
+        <span class="event-type">${escHtml(event.hookType || 'Event')}</span>
+        ${toolBadge}
+        ${statusIcon}
+      </div>
+      ${cmdHtml}
+      ${descHtml}
+    </div>
+    <div class="event-time">${time}</div>
+  `;
+
+  return item;
+}
+
+function prependEvent(event) {
+  const feed = document.getElementById('event-feed');
+  const empty = document.getElementById('empty-state');
+  if (empty) empty.remove();
+
+  if (!matchesFilter(event)) return;
+
+  const el = buildEventEl(event);
+  feed.insertBefore(el, feed.firstChild);
+
+  // Keep DOM lean
+  const items = feed.querySelectorAll('.event-item');
+  if (items.length > 200) items[items.length - 1].remove();
+}
+
+function rebuildFeed() {
+  const feed = document.getElementById('event-feed');
+  feed.innerHTML = '';
+
+  const filtered = allEvents.filter(matchesFilter);
+  if (filtered.length === 0) {
+    feed.innerHTML = `<div class="empty-state" id="empty-state"><div class="icon">⚡</div><p>WAITING FOR CLAUDE CODE EVENTS...</p><p style="margin-top:8px;font-size:11px;">Start a Claude session to see activity here</p></div>`;
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  filtered.forEach(e => frag.appendChild(buildEventEl(e)));
+  feed.appendChild(frag);
+}
+
+// ── Agents ─────────────────────────────────────────────────────────────────────
+function updateAgentCard(event) {
+  if (!event.sessionId && !event.agentId) return;
+  const key = event.agentId || event.sessionId;
+  if (!agents[key]) agents[key] = { id: key, events: 0, tools: new Set(), lastSeen: null };
+  agents[key].events++;
+  if (event.tool) agents[key].tools.add(event.tool);
+  agents[key].lastSeen = event.timestamp;
+  rebuildAgents();
+}
+
+function rebuildAgents() {
+  const container = document.getElementById('agents-container');
+  const keys = Object.keys(agents);
+  if (keys.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">◈</div><p>NO AGENT DATA YET</p></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="agents-grid">${keys.map(k => {
+    const a = agents[k];
+    const last = a.lastSeen ? new Date(a.lastSeen).toLocaleTimeString() : '-';
+    return `<div class="agent-card">
+      <div class="agent-id">⬡ ${escHtml(a.id)}</div>
+      <div class="agent-stat-row"><span>Events</span><span>${a.events}</span></div>
+      <div class="agent-stat-row"><span>Tools</span><span>${[...a.tools].join(', ') || '-'}</span></div>
+      <div class="agent-stat-row"><span>Last seen</span><span>${last}</span></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// ── Controls ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.main-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.pane).classList.add('active');
+  });
+});
+
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+    rebuildFeed();
+  });
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'reset' }));
+  }
+});
+
+function escHtml(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+connect();
+</script>
+</body>
+</html>

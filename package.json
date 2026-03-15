@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-monitor",
+  "version": "1.0.0",
+  "description": "Real-time web dashboard for monitoring Claude Code activity via hooks",
+  "main": "monitor-server.js",
+  "scripts": {
+    "start": "node monitor-server.js",
+    "start:port": "node monitor-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
