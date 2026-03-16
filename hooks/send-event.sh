@@ -15,6 +15,8 @@ INPUT="$(cat)"
 SESSION_ID="${CLAUDE_SESSION_ID:-}"
 AGENT_ID="${CLAUDE_AGENT_ID:-}"
 
+export INPUT HOOK_TYPE SESSION_ID AGENT_ID
+
 PAYLOAD=$(node -e "
   const d = JSON.parse(process.env.INPUT || '{}');
   d.hookType = process.env.HOOK_TYPE;
@@ -29,8 +31,6 @@ PAYLOAD=$(node -e "
 
   console.log(JSON.stringify(d));
 " 2>/dev/null) || PAYLOAD="{\"hookType\":\"$HOOK_TYPE\",\"raw\":true}"
-
-export INPUT HOOK_TYPE SESSION_ID AGENT_ID
 
 # Fire-and-forget: don't block Claude Code
 curl -s -o /dev/null --max-time 2 \
